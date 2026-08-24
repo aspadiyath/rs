@@ -59,6 +59,7 @@ from rsptx.db.crud import (
     update_assignment_exercises,
     update_assignment,
     update_question,
+    fetch_question,
     fetch_question_by_id,
     fetch_one_assignment,
     fetch_late_students_for_assignment,
@@ -780,6 +781,26 @@ async def get_sections_for_chapter(
     return make_json_response(status=status.HTTP_200_OK, detail={"sections": sections})
 
 
+async def _validate_parsonsexample(request_data: QuestionIncoming, base_course: str):
+    """
+    If a CodeTailor backup Parsons problem id was supplied, make sure it
+    refers to a real question in this book (book-authored or
+    instructor-authored -- fetch_question matches on name + base_course
+    either way, the same lookup coach.py uses at grading/help time).
+    """
+    problem_id = (request_data.question_json or {}).get("parsonsexample")
+    if not problem_id or not problem_id.strip():
+        return None
+    problem_id = problem_id.strip()
+    question = await fetch_question(problem_id, basecourse=base_course)
+    if not question:
+        return make_json_response(
+            status=status.HTTP_400_BAD_REQUEST,
+            detail=f"Backup Parsons problem '{problem_id}' not found",
+        )
+    return None
+
+
 @router.post("/new_question")
 async def new_question(
     request_data: QuestionIncoming,
@@ -801,6 +822,11 @@ async def new_question(
 
     if request_data.subchapter is None:
         request_data.subchapter = "Exercises"
+
+    error_response = await _validate_parsonsexample(request_data, course.base_course)
+    if error_response:
+        return error_response
+
     # First create the question
     new_question = QuestionValidator(
         **request_data.model_dump(),
@@ -853,6 +879,11 @@ async def do_update_question(
         request_data.author = user.first_name + " " + user.last_name
     if request_data.subchapter is None:
         request_data.subchapter = "Exercises"
+
+    error_response = await _validate_parsonsexample(request_data, course.base_course)
+    if error_response:
+        return error_response
+
     req = request_data.model_dump()
     req["question"] = req["source"]
     del req["source"]

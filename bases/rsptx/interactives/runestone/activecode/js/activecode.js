@@ -690,7 +690,11 @@ export class ActiveCode extends RunestoneBase {
         }
 
         function cleanTestcase(raw_test_case) {
-            if (raw_test_case !== null && raw_test_case !== "") {
+            if (
+                raw_test_case !== null &&
+                raw_test_case !== undefined &&
+                raw_test_case !== ""
+            ) {
                 if (
                     language.toLowerCase() === "python" ||
                     language.toLowerCase() === "python3"
