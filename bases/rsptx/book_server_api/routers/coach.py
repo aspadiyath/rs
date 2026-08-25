@@ -466,7 +466,11 @@ async def parsons_scaffolding(
             "Problem Name": problem_id,
             "Problem Description": problem_description,
             "Unittest_Code": internal_test_case,
-            "Example": parsonsexample_code,  # This is the html of the example Parsons problem
+            # Compilable solution code, not raw "---"-separated Parsons markup --
+            # this can be returned verbatim as the fixed code (e.g. when the
+            # LLM's generated fix fails unittest validation), so it must never
+            # contain block separators or #distractor/#paired/#settled tags.
+            "Example": extract_parsons_solution(parsonsexample_code),
             "CF (Code)": student_code,
         }
         return get_parsons_help(api_token, language, input_dict, personalization_level)
