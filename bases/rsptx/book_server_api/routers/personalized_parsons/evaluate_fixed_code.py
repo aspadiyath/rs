@@ -226,11 +226,36 @@ def load_and_run_java_tests(java_code, test_code, data_files=None):
 class _JobeTestResult:
     """Minimal stand-in for unittest.TestResult returned by load_and_run_tests."""
 
-    def __init__(self, passed: bool):
+    def __init__(self, passed: bool, details: str = ""):
         self._passed = passed
+        # unittest's failure report (JOBE's stderr), for showing to students
+        self.details = details
 
     def wasSuccessful(self) -> bool:
         return self._passed
+
+
+def run_python_program(program, time_limit=6, data_files=None):
+    """
+    Run a Python program on JOBE with the question's data files beside it.
+    Returns the run's (stdout, stderr). Raises on a JOBE or network failure.
+    """
+    sess = _jobe_session()
+    runspec = {
+        "language_id": "python3",
+        "sourcecode": program,
+        "sourcefilename": "program.py",
+        "parameters": {"timelimitsecs": time_limit},
+    }
+    if data_files:
+        runspec["file_list"] = _push_data_files(sess, data_files)
+    resp = sess.post(
+        settings.jobe_server + "/jobe/index.php/restapi/runs/",
+        json={"run_spec": runspec},
+        timeout=time_limit + 10,
+    )
+    result = resp.json()
+    return result.get("stdout") or "", result.get("stderr") or ""
 
 
 def load_and_run_tests(unittest_case, code_to_test, time_limit=6, data_files=None):
@@ -279,7 +304,7 @@ def load_and_run_tests(unittest_case, code_to_test, time_limit=6, data_files=Non
         # even when tests pass.
         last_line = out.splitlines()[-1].strip() if out else ""
         passed = last_line == "PASS"
-        return _JobeTestResult(passed)
+        return _JobeTestResult(passed, (result.get("stderr") or "").strip())
 
     except Exception:
         return _JobeTestResult(False)

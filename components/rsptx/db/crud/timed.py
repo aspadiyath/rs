@@ -13,6 +13,7 @@ from ..models import (
 )
 from ..async_session import async_session
 from rsptx.logging import rslogger
+from rsptx.response_helpers.core import canonical_utcnow
 
 
 async def fetch_timed_exam(
@@ -109,6 +110,68 @@ async def fetch_timed_assessments(course_id: int) -> List[Tuple[str, str]]:
     async with async_session() as session:
         res = await session.execute(query)
         return [(row.name, row.description or "") for row in res.all()]
+
+
+async def is_on_open_timed_assessment(question_id: int, course_id: int) -> bool:
+    """
+    Whether a question is on a timed assessment in this course that isn't
+    past due. Explain in Plain English questions use this to withhold the code
+    generated from a student's explanation, and every hint, while an exam that
+    uses them may still be taken; the decision is the server's, so a student
+    can't get the feedback by calling the grading endpoint directly.
+
+    :param question_id: int, the question's id
+    :param course_id: int, the course id
+    :return: bool, True if any such assessment exists
+    """
+    query = (
+        select(Assignment.id)
+        .join(AssignmentQuestion, AssignmentQuestion.assignment_id == Assignment.id)
+        .where(
+            (AssignmentQuestion.question_id == question_id)
+            & (Assignment.course == course_id)
+            & ((Assignment.is_timed == "T") | (Assignment.kind == "Timed"))
+            & (Assignment.duedate > canonical_utcnow())
+        )
+        .limit(1)
+    )
+    async with async_session() as session:
+        res = await session.execute(query)
+        return res.first() is not None
+
+
+async def was_served_on_open_timed_assessment(
+    sid: str, question_name: str, course_id: int
+) -> bool:
+    """
+    Whether a select question on a timed assessment in this course that
+    isn't past due served this question to this student. Exams usually wrap
+    their questions in select questions, so the assessment lists the select
+    question, not the question the student sees; ``selected_questions`` has
+    the server's record of what each student was served.
+
+    :param sid: str, the student's username
+    :param question_name: str, the served question's name (div_id)
+    :param course_id: int, the course id
+    :return: bool, True if any such assessment served it
+    """
+    query = (
+        select(Assignment.id)
+        .join(AssignmentQuestion, AssignmentQuestion.assignment_id == Assignment.id)
+        .join(Question, Question.id == AssignmentQuestion.question_id)
+        .join(SelectedQuestion, SelectedQuestion.selector_id == Question.name)
+        .where(
+            (SelectedQuestion.sid == sid)
+            & (SelectedQuestion.selected_id == question_name)
+            & (Assignment.course == course_id)
+            & ((Assignment.is_timed == "T") | (Assignment.kind == "Timed"))
+            & (Assignment.duedate > canonical_utcnow())
+        )
+        .limit(1)
+    )
+    async with async_session() as session:
+        res = await session.execute(query)
+        return res.first() is not None
 
 
 async def reset_student_assessment(

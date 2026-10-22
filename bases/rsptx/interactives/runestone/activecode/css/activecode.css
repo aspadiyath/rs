@@ -439,3 +439,77 @@ button.reopen-help-btn {
     }
 }
 /* CodeTailor-related CSS END */
+
+/* Explain in Plain English (activecode_eipe.js) */
+.eipe {
+    margin-top: 0.5em;
+}
+.eipe label {
+    font-weight: normal;
+}
+.eipe-explanation {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+}
+.eipe-actions {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+    margin: 0.5em 0;
+}
+.eipe-count {
+    font-size: 0.9em;
+    opacity: 0.7;
+}
+.eipe-subheading {
+    margin-top: 0.5em;
+    font-weight: bold;
+}
+.eipe-result pre {
+    margin: 0.5em 0 0;
+    white-space: pre-wrap;
+}
+.eipe-counterexample {
+    margin-top: 0.5em;
+}
+.eipe-counterexample td {
+    padding: 0.15em 1em 0.15em 0;
+    vertical-align: top;
+}
+.eipe-missed-line {
+    background: var(--ac-eipe-missed-line-bg);
+    box-shadow: inset 5px 0 0 var(--ac-eipe-missed-line-bar);
+}
+.eipe-missed {
+    margin-top: 0.5em;
+    font-weight: bold;
+}
+.eipe-focus {
+    margin-top: 0.5em;
+}
+.eipe-focus label {
+    display: block;
+    font-weight: normal;
+}
+.eipe-focus-prediction {
+    font-family: monospace;
+    min-width: 16em;
+    margin-right: 0.5em;
+}
+.eipe-focus-answer {
+    margin-top: 0.25em;
+    font-family: monospace;
+}
+.eipe-generated-hint {
+    font-size: 0.9em;
+    margin-bottom: 0.25em;
+}
+.eipe-generated {
+    margin-top: 0.25em;
+}
+.eipe-exam-note {
+    font-size: 0.9em;
+    font-style: italic;
+}

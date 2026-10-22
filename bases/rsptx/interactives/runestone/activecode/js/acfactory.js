@@ -4,6 +4,7 @@ import HTMLActiveCode from "./activecode_html.js";
 import SQLActiveCode from "./activecode_sql.js";
 import LiveCode from "./livecode.js";
 import GodotActiveCode from "./activecode_gdscript";
+import EiPEActiveCode, { TimedEiPEActiveCode } from "./activecode_eipe.js";
 import CodeMirror from "codemirror";
 import { registerGDScriptMode } from "./codemirror_gdscript-mode.js";
 
@@ -34,6 +35,13 @@ export default class ACFactory {
         if (lang === undefined) {
             let dataElem = opts.orig.querySelector("[data-lang]");
             lang = dataElem ? dataElem.dataset.lang : undefined;
+        }
+        // Explain in Plain English: the student explains the code instead of
+        // running it, so the language's runner doesn't matter.
+        if (opts.orig.querySelector('textarea[data-eipe="true"]')) {
+            return opts.timed == true
+                ? new TimedEiPEActiveCode(opts)
+                : new EiPEActiveCode(opts);
         }
         if (opts.timed == true) {
             if (lang === "python") {

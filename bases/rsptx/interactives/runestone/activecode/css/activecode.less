@@ -8,6 +8,9 @@
     --ac-passed: rgb(131, 211, 130);
     --ac-highlight-line-bg: #feffe6;
     --ac-locked-line-bg: #f8f8f8;
+    // A line an Explain in Plain English answer missed (activecode_eipe.js)
+    --ac-eipe-missed-line-bg: #fff0a8;
+    --ac-eipe-missed-line-bar: #d99a00;
 }
 
 :root.dark-mode {
@@ -16,4 +19,11 @@
     --ac-passed: rgb(40, 88, 40);
     --ac-highlight-line-bg: #282816;
     --ac-locked-line-bg: #222;
+}
+
+// PreTeXt's dark theme sets data-theme instead of the dark-mode class.
+:root.dark-mode,
+[data-theme="dark"] {
+    --ac-eipe-missed-line-bg: #4d4214;
+    --ac-eipe-missed-line-bar: #f0b400;
 }

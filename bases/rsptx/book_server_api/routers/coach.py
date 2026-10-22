@@ -32,6 +32,7 @@ from .personalized_parsons.buggy_code_checker import (
     clean_java_code,
     clean_python_code,
 )
+from .eipe_grading import check_explanation, grade_explanation
 from .personalized_parsons.subgoal_labels import (
     build_label_puzzle,
     is_label_line,
@@ -48,7 +49,17 @@ from rsptx.auth.session import get_optional_user
 from rsptx.db.crud.crud import fetch_api_token
 from rsptx.db.crud.course import fetch_course
 from rsptx.db.crud.question import fetch_question
-from rsptx.db.crud import fetch_source_code
+from rsptx.db.crud import (
+    create_useinfo_entry,
+    fetch_source_code,
+    is_on_open_timed_assessment,
+    was_served_on_open_timed_assessment,
+)
+from rsptx.db.models import UseinfoValidation
+from rsptx.response_helpers.core import canonical_utcnow
+from rsptx.validation.schemas import LogItemIncoming
+
+from .rslogging import log_book_event
 
 # .. _APIRouter config:
 #
@@ -948,3 +959,207 @@ async def parsons_scaffolding(
         return JSONResponse(
             content={"error": "Invalid personalization_level"}, status_code=400
         )
+
+
+# Explain in Plain English
+# ========================
+# An activecode question with data-eipe="true" shows its code read-only and
+# asks the student to explain it; see eipe_grading.py.
+# question_json.check_inputs lists argument strings (e.g.
+# '["banana", "cherry", "cat"]') on which code written from an explanation
+# must behave like the explained function -- inputs that separate it from
+# plausible misreadings.
+
+
+async def _load_eipe_question(problem_id, course):
+    """
+    The course row and question for ``problem_id``, or a JSONResponse
+    explaining why not. Same lookup order as CodeTailor: the course's base
+    course, then a global name match.
+    """
+    if not problem_id:
+        return (
+            None,
+            None,
+            JSONResponse(
+                content={"detail": "problem_id is required"},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            ),
+        )
+    course_row = None
+    if course:
+        try:
+            course_row = await fetch_course(course)
+        except AttributeError:
+            course_row = None
+    basecourse = getattr(course_row, "base_course", None)
+    question = None
+    if basecourse:
+        question = await fetch_question(problem_id, basecourse=basecourse)
+    if not question:
+        question = await fetch_question(problem_id)
+    if not question:
+        return (
+            None,
+            None,
+            JSONResponse(
+                content={"detail": f"Question '{problem_id}' not found"},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            ),
+        )
+    return course_row, question, None
+
+
+async def _question_data_files(question, course_row, *code_sources):
+    basecourse = getattr(course_row, "base_course", None)
+    course_name = getattr(course_row, "course_name", None)
+    return await _fetch_data_files(
+        _data_file_candidates(question.htmlsrc, *code_sources),
+        list(
+            dict.fromkeys(
+                [
+                    (basecourse, course_name),
+                    (question.base_course, question.base_course),
+                ]
+            )
+        ),
+    )
+
+
+def _login_required():
+    return JSONResponse(
+        content={"detail": "Log in to Runestone to check your explanation."},
+        status_code=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
+@router.post("/eipe_check")
+async def eipe_check(
+    request: Request, course: Optional[str] = None, user=Depends(get_optional_user)
+):
+    """Grade an Explain in Plain English answer; see eipe_grading.py."""
+    if user is None:
+        return _login_required()
+    data = await request.json()
+    explanation = data.get("explanation") or ""
+    # Explanations that can't be graded are turned back before any LLM call.
+    problem = check_explanation(explanation)
+    if problem:
+        return {"status": "rejected", "message": problem}
+
+    course_row, question, error = await _load_eipe_question(
+        data.get("problem_id"), course
+    )
+    if error:
+        return error
+    if course is None or course == "personalized_parsons":
+        api_token = DEV_API_KEY
+    else:
+        token_record = (
+            await fetch_api_token(course_id=course_row.id, provider="openai")
+            if course_row
+            else None
+        )
+        api_token = token_record.token if token_record else None
+    if not api_token:
+        return JSONResponse(
+            content={"detail": "This course has no OpenAI API token."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Browsers drop the newline right after <textarea>, so drop it here too
+    # or every line number the student is shown would be off by one.
+    reference = _starter_code_from_question(question)
+    if reference.startswith("\n"):
+        reference = reference[1:]
+    test_code = (question.question_json or {}).get(
+        "suffix_code"
+    ) or _extract_suffix_code_from_htmlsrc(question.htmlsrc)
+    if test_code:
+        test_code = clean_python_testcase(test_code)
+    check_inputs = (question.question_json or {}).get("check_inputs") or []
+    data_files = await _question_data_files(question, course_row, reference, test_code)
+
+    # While a timed assessment that uses this question may still be taken,
+    # students get no feedback at all: not the generated code, not the hints,
+    # not even whether it passed. It's still graded and scored. Decided here,
+    # not by the page, so calling this endpoint directly gets nothing more.
+    exam = bool(course_row) and (
+        await is_on_open_timed_assessment(question.id, course_row.id)
+        # an exam that serves it through a select question, the usual setup
+        or await was_served_on_open_timed_assessment(
+            user.username, question.name, course_row.id
+        )
+    )
+    try:
+        result = await asyncio.to_thread(
+            grade_explanation,
+            api_token,
+            explanation,
+            reference,
+            test_code,
+            check_inputs,
+            data_files,
+            hints=not exam,
+        )
+    except Exception as e:
+        rslogger.error(f"EiPE: grading failed for '{question.name}': {e}")
+        return {
+            "status": "error",
+            "message": "Sorry, your explanation couldn't be checked right now. "
+            "Try again in a minute.",
+        }
+    await _record_eipe_grade(request, user, course, data, explanation, result, exam)
+    if exam:
+        return {"status": "submitted", "exam": True}
+    return result
+
+
+async def _record_eipe_grade(request, user, course, data, explanation, result, exam):
+    """
+    Score the explanation the way an activecode run is scored, with a
+    ``unittest`` event (all or nothing), so it reaches the gradebook through
+    the usual which_to_grade rules. Also keep the full grading record, with
+    the generated code students may not see, for instructors reviewing
+    grades; it goes straight to useinfo because the logging endpoint keeps
+    only 512 characters of an act.
+    """
+    passed = bool(result.get("passed"))
+    div_id = data.get("problem_id")
+    try:
+        await log_book_event(
+            LogItemIncoming(
+                event="unittest",
+                act=f"percent:{100.0 if passed else 0.0}:passed:"
+                f"{int(passed)}:failed:{int(not passed)}",
+                div_id=div_id,
+                course_name=course,
+                selector_id=data.get("selector_id"),
+                assignment_id=data.get("assignment_id"),
+            ),
+            request,
+            user,
+        )
+        await create_useinfo_entry(
+            UseinfoValidation(
+                timestamp=canonical_utcnow(),
+                sid=user.username,
+                event="eipe_graded",
+                act=json.dumps(
+                    {
+                        "aid": data.get("aid"),
+                        "exam": exam,
+                        "explanation": explanation,
+                        "passed": passed,
+                        "generated_code": result.get("generated_code"),
+                        "counterexample": result.get("counterexample"),
+                        "missed": result.get("missed"),
+                    }
+                ),
+                div_id=div_id,
+                course_id=course,
+            )
+        )
+    except Exception as e:
+        # A grade that fails to save must not hide the result from the student.
+        rslogger.error(f"EiPE: couldn't record the grade for '{div_id}': {e}")
