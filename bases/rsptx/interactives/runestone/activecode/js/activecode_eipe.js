@@ -22,50 +22,12 @@ import { t } from "../../common/js/rsi18n.js";
 // Keep in step with MAX_EXPLANATION_CHARS in eipe_grading.py.
 export const MAX_EXPLANATION_CHARS = 250;
 
-// The book server keeps only the first 512 characters of a logged act
-// (rslogging.py), so a check is logged as several small acts, each under
-// this length, joined by a shared attempt id.
-export const MAX_ACT_CHARS = 500;
-// Room for one returned value in a logged counterexample.
-const MAX_LOGGED_VALUE_CHARS = 120;
-
+// The book server keeps only 512 characters of a logged act (rslogging.py).
 function clip(text, length) {
     if (typeof text !== "string" || text.length <= length) {
         return text;
     }
     return text.slice(0, length - 1) + "…";
-}
-
-// A call result ({value|error, printed}) small enough to log.
-function clipResult(result) {
-    const clipped = {};
-    for (const [key, value] of Object.entries(result || {})) {
-        clipped[key] = clip(value, MAX_LOGGED_VALUE_CHARS);
-    }
-    return clipped;
-}
-
-// Split ``text`` into acts no longer than MAX_ACT_CHARS once ``makeAct``
-// (part, of, piece) is serialized. Escaping (newlines, quotes) makes the
-// serialized act longer than the piece, so pieces are sized by measuring.
-export function splitIntoActs(text, makeAct) {
-    const pieces = [];
-    let rest = text || "";
-    while (rest.length) {
-        let size = rest.length;
-        while (
-            size > 1 &&
-            JSON.stringify(makeAct(0, 0, rest.slice(0, size))).length >
-                MAX_ACT_CHARS
-        ) {
-            size = Math.floor(size * 0.8);
-        }
-        pieces.push(rest.slice(0, size));
-        rest = rest.slice(size);
-    }
-    return pieces.map((piece, i) =>
-        JSON.stringify(makeAct(i + 1, pieces.length, piece)),
-    );
 }
 
 // The name of the first top-level function in ``code``.
@@ -203,17 +165,17 @@ export default class EiPEActiveCode extends ActiveCode {
         this.checkButton.disabled = false;
         this.clearMissedLines();
         this.showResult(result);
-        await this.logCheck(explanation, result);
     }
 
     // Send the explanation to the server to be graded (and scored), and
-    // return its result. Sets the attempt id the logs share.
+    // return its result. The server keeps the full record under the attempt
+    // id (aid); the page logs only what the server can't see, under the same id.
     async gradeExplanation(explanation) {
         this.attempts += 1;
         this.lastAid = `${this.divid}-${this.attempts}-${Date.now()}`;
         try {
             const response = await fetch(
-                `${eBookConfig.new_server_prefix}/coach/eipe_check?course=${eBookConfig.course}`,
+                `${eBookConfig.new_server_prefix}/eipe/check?course=${eBookConfig.course}`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -261,55 +223,6 @@ export default class EiPEActiveCode extends ActiveCode {
             }
         } catch (e) {
             // nothing saved, or storage is unavailable
-        }
-    }
-
-    // Log one check as several acts sharing an attempt id (aid): the
-    // outcome, the counterexample, and the generated code in parts.
-    async logCheck(explanation, result) {
-        const aid = this.lastAid;
-        const counterexample = result.counterexample;
-        await this.logBookEvent({
-            event: "eipe",
-            div_id: this.divid,
-            act: JSON.stringify({
-                aid: aid,
-                attempt: this.attempts,
-                status: result.status,
-                passed: result.passed ?? null,
-                missed_lines: result.missed?.lines ?? null,
-                has_counterexample: Boolean(counterexample),
-                explanation: explanation,
-            }),
-            // An exam submission comes back without a verdict; don't log one.
-            ...(result.status === "graded"
-                ? { correct: result.passed ? "T" : "F" }
-                : {}),
-        });
-        if (counterexample) {
-            await this.logBookEvent({
-                event: "eipe_counterexample",
-                div_id: this.divid,
-                act: JSON.stringify({
-                    aid: aid,
-                    input: clip(counterexample.input, MAX_LOGGED_VALUE_CHARS),
-                    expected: clipResult(counterexample.expected),
-                    got: clipResult(counterexample.got),
-                }),
-            });
-        }
-        const acts = splitIntoActs(result.generated_code, (part, of, code) => ({
-            aid: aid,
-            part: part,
-            of: of,
-            code: code,
-        }));
-        for (const act of acts) {
-            await this.logBookEvent({
-                event: "eipe_code",
-                div_id: this.divid,
-                act: act,
-            });
         }
     }
 
@@ -565,7 +478,6 @@ export class TimedEiPEActiveCode extends EiPEActiveCode {
         // The explanation last graded, and what the server said about it.
         this.gradedExplanation = null;
         this.lastResult = null;
-        this.loggedAid = null;
         this.updateAnswered();
         this.explanationBox.addEventListener("input", () =>
             this.updateAnswered(),
@@ -595,15 +507,8 @@ export class TimedEiPEActiveCode extends EiPEActiveCode {
         }
     }
 
-    async logCurrentAnswer() {
-        if (this.lastResult && this.loggedAid !== this.lastAid) {
-            this.loggedAid = this.lastAid;
-            await this.logCheck(
-                this.explanationBox.value.trim(),
-                this.lastResult,
-            );
-        }
-    }
+    // The server records each graded explanation itself.
+    async logCurrentAnswer() {}
 
     // "I" (skipped) when nothing was graded. Otherwise the result isn't
     // known on the page, so the exam leaves this question out of its own

@@ -391,14 +391,14 @@ def grade_explanation(
     hints=True,
 ):
     """
-    Grade ``explanation`` of ``reference_code``. With ``hints`` False (an
-    exam) no missed lines are looked for, which saves an LLM call. The code generated from it
+    Grade ``explanation`` of ``reference_code``. The code generated from it
     passes when it passes ``test_code`` (unittest source in the shape
     clean_python_testcase produces, may be empty) and behaves like the
-    reference on every one of ``check_inputs``. Returns a dict for the
-    client: status is "rejected" (fix the explanation; nothing was
-    generated), "error", or "graded" with passed, generated_code,
-    counterexample and test_output.
+    reference on every one of ``check_inputs`` and the tests' own inputs.
+    With ``hints`` False (an exam) no missed lines are looked for, which saves
+    an LLM call. Returns a dict for the client: status is "rejected" (fix the
+    explanation; nothing was generated), "error", or "graded" with passed,
+    generated_code, counterexample, missed and example_call.
     """
     problem = check_explanation(explanation)
     if problem:
@@ -420,10 +420,12 @@ def grade_explanation(
         inputs[:MAX_COMPARED_INPUTS],
         data_files,
     )
-    tests_passed, test_output = True, ""
-    if test_code:
-        result = load_and_run_tests(test_code, generated_code, data_files=data_files)
-        tests_passed, test_output = result.wasSuccessful(), result.details
+    tests_passed = (
+        not test_code
+        or load_and_run_tests(
+            test_code, generated_code, data_files=data_files
+        ).wasSuccessful()
+    )
     missed = None
     if counterexample and counterexample["input"] is not None:
         test = counterexample_test(name, counterexample)
@@ -445,7 +447,6 @@ def grade_explanation(
         "counterexample": counterexample,
         "missed": missed,
         "example_call": example_call(name, counterexample, inputs),
-        "test_output": test_output,
     }
 
 

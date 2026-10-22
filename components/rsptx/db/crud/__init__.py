@@ -315,7 +315,6 @@ from .timed import (
     fetch_timed_exam,
     is_on_open_timed_assessment,
     reset_student_assessment,
-    was_served_on_open_timed_assessment,
 )
 
 #
@@ -643,7 +642,6 @@ __all__ += [
     "fetch_timed_exam",
     "is_on_open_timed_assessment",
     "reset_student_assessment",
-    "was_served_on_open_timed_assessment",
 ]
 # from .user
 __all__ += [

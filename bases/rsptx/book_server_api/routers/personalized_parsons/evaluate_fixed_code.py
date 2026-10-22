@@ -226,10 +226,8 @@ def load_and_run_java_tests(java_code, test_code, data_files=None):
 class _JobeTestResult:
     """Minimal stand-in for unittest.TestResult returned by load_and_run_tests."""
 
-    def __init__(self, passed: bool, details: str = ""):
+    def __init__(self, passed: bool):
         self._passed = passed
-        # unittest's failure report (JOBE's stderr), for showing to students
-        self.details = details
 
     def wasSuccessful(self) -> bool:
         return self._passed
@@ -244,7 +242,7 @@ def run_python_program(program, time_limit=6, data_files=None):
     runspec = {
         "language_id": "python3",
         "sourcecode": program,
-        "sourcefilename": "program.py",
+        "sourcefilename": "solution.py",
         "parameters": {"timelimitsecs": time_limit},
     }
     if data_files:
@@ -280,34 +278,17 @@ def load_and_run_tests(unittest_case, code_to_test, time_limit=6, data_files=Non
         + 'print("PASS" if _result.result.wasSuccessful() else "FAIL")\n'
     )
 
-    sess = _jobe_session()
-    runs_url = settings.jobe_server + "/jobe/index.php/restapi/runs/"
-
     try:
-        runspec = {
-            "language_id": "python3",
-            "sourcecode": combined,
-            "sourcefilename": "solution.py",
-            "parameters": {"timelimitsecs": time_limit},
-        }
-        if data_files:
-            runspec["file_list"] = _push_data_files(sess, data_files)
-        resp = sess.post(runs_url, json={"run_spec": runspec}, timeout=time_limit + 10)
-        try:
-            result = resp.json()
-        except Exception:
-            return _JobeTestResult(False)
-
-        out = (result.get("stdout") or "").strip()
-        # Check the last line so student debug prints don't cause false failures.
-        # Trust stdout over outcome code: JOBE/Python3 may return outcome 12
-        # even when tests pass.
-        last_line = out.splitlines()[-1].strip() if out else ""
-        passed = last_line == "PASS"
-        return _JobeTestResult(passed, (result.get("stderr") or "").strip())
-
+        stdout, _ = run_python_program(combined, time_limit, data_files)
     except Exception:
         return _JobeTestResult(False)
+
+    out = stdout.strip()
+    # Check the last line so student debug prints don't cause false failures.
+    # Trust stdout over outcome code: JOBE/Python3 may return outcome 12
+    # even when tests pass.
+    last_line = out.splitlines()[-1].strip() if out else ""
+    return _JobeTestResult(last_line == "PASS")
 
 
 def fix_indentation(text):

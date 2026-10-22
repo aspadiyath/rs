@@ -112,65 +112,45 @@ async def fetch_timed_assessments(course_id: int) -> List[Tuple[str, str]]:
         return [(row.name, row.description or "") for row in res.all()]
 
 
-async def is_on_open_timed_assessment(question_id: int, course_id: int) -> bool:
+async def is_on_open_timed_assessment(
+    question_id: int, question_name: str, sid: str, course_id: int
+) -> bool:
     """
     Whether a question is on a timed assessment in this course that isn't
-    past due. Explain in Plain English questions use this to withhold the code
-    generated from a student's explanation, and every hint, while an exam that
-    uses them may still be taken; the decision is the server's, so a student
-    can't get the feedback by calling the grading endpoint directly.
+    past due, either directly or through a select question that served it to
+    this student (exams usually wrap their questions in select questions, and
+    ``selected_questions`` records what each student was served). Explain in
+    Plain English questions use this to give no feedback during an exam.
 
     :param question_id: int, the question's id
+    :param question_name: str, the question's name (div_id)
+    :param sid: str, the student's username
     :param course_id: int, the course id
     :return: bool, True if any such assessment exists
     """
-    query = (
+    is_open_exam = (
+        (Assignment.course == course_id)
+        & ((Assignment.is_timed == "T") | (Assignment.kind == "Timed"))
+        & (Assignment.duedate > canonical_utcnow())
+    )
+    on_it = (
         select(Assignment.id)
         .join(AssignmentQuestion, AssignmentQuestion.assignment_id == Assignment.id)
-        .where(
-            (AssignmentQuestion.question_id == question_id)
-            & (Assignment.course == course_id)
-            & ((Assignment.is_timed == "T") | (Assignment.kind == "Timed"))
-            & (Assignment.duedate > canonical_utcnow())
-        )
-        .limit(1)
+        .where(is_open_exam & (AssignmentQuestion.question_id == question_id))
     )
-    async with async_session() as session:
-        res = await session.execute(query)
-        return res.first() is not None
-
-
-async def was_served_on_open_timed_assessment(
-    sid: str, question_name: str, course_id: int
-) -> bool:
-    """
-    Whether a select question on a timed assessment in this course that
-    isn't past due served this question to this student. Exams usually wrap
-    their questions in select questions, so the assessment lists the select
-    question, not the question the student sees; ``selected_questions`` has
-    the server's record of what each student was served.
-
-    :param sid: str, the student's username
-    :param question_name: str, the served question's name (div_id)
-    :param course_id: int, the course id
-    :return: bool, True if any such assessment served it
-    """
-    query = (
+    served_by_it = (
         select(Assignment.id)
         .join(AssignmentQuestion, AssignmentQuestion.assignment_id == Assignment.id)
         .join(Question, Question.id == AssignmentQuestion.question_id)
         .join(SelectedQuestion, SelectedQuestion.selector_id == Question.name)
         .where(
-            (SelectedQuestion.sid == sid)
+            is_open_exam
+            & (SelectedQuestion.sid == sid)
             & (SelectedQuestion.selected_id == question_name)
-            & (Assignment.course == course_id)
-            & ((Assignment.is_timed == "T") | (Assignment.kind == "Timed"))
-            & (Assignment.duedate > canonical_utcnow())
         )
-        .limit(1)
     )
     async with async_session() as session:
-        res = await session.execute(query)
+        res = await session.execute(on_it.union(served_by_it).limit(1))
         return res.first() is not None
 
 

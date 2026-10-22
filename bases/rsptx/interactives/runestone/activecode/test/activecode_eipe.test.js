@@ -4,9 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import ACFactory from "../js/acfactory.js";
 import { ActiveCode } from "../js/activecode.js";
 import EiPEActiveCode, {
-    MAX_ACT_CHARS,
     TimedEiPEActiveCode,
-    splitIntoActs,
     testsForBrowser,
 } from "../js/activecode_eipe.js";
 
@@ -86,7 +84,7 @@ describe("EiPEActiveCode", () => {
         await ac.checkExplanation();
 
         const [url, init] = fetchMock.mock.calls[0];
-        expect(url).toBe("/ns/coach/eipe_check?course=testcourse");
+        expect(url).toBe("/ns/eipe/check?course=testcourse");
         const body = JSON.parse(init.body);
         expect(body).toMatchObject({
             problem_id: "eipe_4",
@@ -99,10 +97,8 @@ describe("EiPEActiveCode", () => {
         expect(ac.generatedCode.editor.getValue()).toContain(
             "return max(nums)",
         );
-        const logged = ac.logBookEvent.mock.calls[0][0];
-        expect(logged.event).toBe("eipe");
-        expect(logged.correct).toBe("T");
-        expect(JSON.parse(logged.act).passed).toBe(true);
+        // the server records the check; the page logs nothing of its own
+        expect(ac.logBookEvent).not.toHaveBeenCalled();
     });
 
     it("shows an input where the generated code differs", async () => {
@@ -126,7 +122,6 @@ describe("EiPEActiveCode", () => {
         expect(box.textContent).toContain("foo([3, 9, 2])");
         expect(box.textContent).toContain("9");
         expect(box.textContent).toContain("raises ValueError: empty");
-        expect(ac.logBookEvent.mock.calls[0][0].correct).toBe("F");
     });
 
     it("says so when the generated code timed out", async () => {
@@ -204,8 +199,6 @@ describe("EiPEActiveCode", () => {
             ).toContain("line 2");
             // a first miss gets the highlight alone
             expect(ac.resultDiv.querySelector(".eipe-focus")).toBeNull();
-            const act = JSON.parse(ac.logBookEvent.mock.calls[0][0].act);
-            expect(act.missed_lines).toEqual([2]);
         });
 
         it("clears the highlight on the next check", async () => {
@@ -254,71 +247,6 @@ describe("EiPEActiveCode", () => {
                 missed: { lines: [1], question: missedResult.missed.question },
             });
             expect(ac.resultDiv.querySelector(".eipe-focus")).toBeNull();
-        });
-    });
-
-    describe("logging", () => {
-        // The book server keeps only 512 characters of each act.
-        function loggedActs(ac) {
-            return ac.logBookEvent.mock.calls.map(([event]) => event);
-        }
-
-        it("logs a check as acts that each fit and share an attempt id", async () => {
-            const longCode =
-                "def foo(nums):\n" +
-                '    s = "quote \\" and newline"\n'.repeat(60);
-            respondWith({
-                status: "graded",
-                passed: false,
-                generated_code: longCode,
-                counterexample: {
-                    input: "[" + "1, ".repeat(200) + "1]",
-                    expected: { value: "x".repeat(1000), printed: "" },
-                    got: { value: "2", printed: "" },
-                },
-                missed: { lines: [2], question: null },
-            });
-            const ac = new EiPEActiveCode({ orig: makeFixture("log_1") });
-            ac.logBookEvent = vi.fn();
-            // the longest explanation allowed, with characters JSON escapes
-            ac.explanationBox.value = 'a "b" \\ '.repeat(40).slice(0, 250);
-            await ac.checkExplanation();
-
-            const events = loggedActs(ac);
-            for (const event of events) {
-                expect(event.act.length).toBeLessThanOrEqual(512);
-            }
-            const acts = events.map((event) => JSON.parse(event.act));
-            const aids = new Set(acts.map((act) => act.aid));
-            expect(aids.size).toBe(1);
-
-            expect(events[0].event).toBe("eipe");
-            expect(acts[0].explanation).toBe(ac.explanationBox.value.trim());
-            expect(acts[0].missed_lines).toEqual([2]);
-            expect(events[1].event).toBe("eipe_counterexample");
-
-            const code = events
-                .map((event, i) => [event, acts[i]])
-                .filter(([event]) => event.event === "eipe_code")
-                .sort(([, a], [, b]) => a.part - b.part)
-                .map(([, act]) => act.code)
-                .join("");
-            expect(code).toBe(longCode);
-        });
-
-        it("splits text by its serialized length", () => {
-            const acts = splitIntoActs("\n".repeat(1000), (part, of, text) => ({
-                part,
-                of,
-                text,
-            }));
-            expect(acts.length).toBeGreaterThan(2);
-            for (const act of acts) {
-                expect(act.length).toBeLessThanOrEqual(MAX_ACT_CHARS);
-            }
-            expect(acts.map((act) => JSON.parse(act).text).join("")).toBe(
-                "\n".repeat(1000),
-            );
         });
     });
 
@@ -470,8 +398,6 @@ describe("EiPEActiveCode", () => {
             ac.resultDiv.querySelector(".alert-danger, .alert-success"),
         ).toBeNull();
         expect(ac.generatedCode).toBeUndefined();
-        // no verdict is logged for it either
-        expect(ac.logBookEvent.mock.calls[0][0].correct).toBeUndefined();
     });
 
     describe("in a timed exam", () => {
@@ -513,11 +439,6 @@ describe("EiPEActiveCode", () => {
             // unchanged explanation: not graded again
             await ac.checkCurrentAnswer();
             expect(fetchMock).toHaveBeenCalledTimes(1);
-
-            await ac.logCurrentAnswer();
-            await ac.logCurrentAnswer();
-            const events = ac.logBookEvent.mock.calls.map(([e]) => e.event);
-            expect(events.filter((e) => e === "eipe")).toHaveLength(1);
         });
 
         it("counts an empty explanation as skipped", () => {
