@@ -86,6 +86,8 @@ def create_assignment_summary(assignment_id, course):
         union
         (select div_id, sid, correct, percent from matching_answers where course_name = '{COURSE_NAME}')
         union
+        (select div_id, sid, correct, percent from eipe_answers where course_name = '{COURSE_NAME}')
+        union
         (select div_id, sid, correct, percent from microparsons_answers where course_name = '{COURSE_NAME}')
         union
         (select div_id, sid, correct, percent from splice_answers where course_name = '{COURSE_NAME}')

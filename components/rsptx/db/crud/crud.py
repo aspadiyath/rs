@@ -51,6 +51,7 @@ EVENT2TABLE = {
     "clickableArea": "clickablearea_answers",
     "codelens": "codelens_answers",
     "dragNdrop": "dragndrop_answers",
+    "eipe": "eipe_answers",
     "fillb": "fitb_answers",
     "lp_build": "lp_answers",
     "matching": "matching_answers",

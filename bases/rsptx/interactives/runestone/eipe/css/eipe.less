@@ -1,0 +1,89 @@
+:root {
+    // A line an Explain in Plain English answer missed
+    --eipe-missed-line-bg: #fff0a8;
+    --eipe-missed-line-bar: #d99a00;
+}
+
+// PreTeXt's dark theme sets data-theme instead of the dark-mode class.
+:root.dark-mode,
+[data-theme="dark"] {
+    --eipe-missed-line-bg: #4d4214;
+    --eipe-missed-line-bar: #f0b400;
+}
+
+.eipe-code .CodeMirror {
+    height: auto;
+    border: 1px solid var(--componentBorderColor, #ddd);
+}
+.eipe {
+    margin-top: 0.5em;
+}
+.eipe label {
+    font-weight: normal;
+}
+.eipe-explanation {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+}
+.eipe-actions {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+    margin: 0.5em 0;
+}
+.eipe-count {
+    font-size: 0.9em;
+    opacity: 0.7;
+}
+.eipe-subheading {
+    margin-top: 0.5em;
+    font-weight: bold;
+}
+.eipe-result pre {
+    margin: 0.5em 0 0;
+    white-space: pre-wrap;
+}
+.eipe-counterexample {
+    margin-top: 0.5em;
+}
+.eipe-counterexample td {
+    padding: 0.15em 1em 0.15em 0;
+    vertical-align: top;
+}
+.eipe-missed-line {
+    background: var(--eipe-missed-line-bg);
+    box-shadow: inset 5px 0 0 var(--eipe-missed-line-bar);
+}
+.eipe-missed {
+    margin-top: 0.5em;
+    font-weight: bold;
+}
+.eipe-focus {
+    margin-top: 0.5em;
+}
+.eipe-focus label {
+    display: block;
+    font-weight: normal;
+}
+.eipe-focus-prediction {
+    font-family: monospace;
+    min-width: 16em;
+    margin-right: 0.5em;
+}
+.eipe-focus-answer {
+    margin-top: 0.25em;
+    font-family: monospace;
+}
+.eipe-generated-hint {
+    font-size: 0.9em;
+    margin-bottom: 0.25em;
+}
+.eipe-generated {
+    margin-top: 0.25em;
+}
+.eipe-exam-note {
+    font-size: 0.9em;
+    font-style: italic;
+}

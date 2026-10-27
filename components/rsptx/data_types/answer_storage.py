@@ -29,6 +29,7 @@ QTYPE_TO_TABLE = {
     "dragndrop": "dragndrop_answers",
     "codelens": "codelens_answers",
     "matching": "matching_answers",
+    "eipe": "eipe_answers",
     "webwork": "webwork_answers",
     "hparsons": "microparsons_answers",
     "microparsons": "microparsons_answers",

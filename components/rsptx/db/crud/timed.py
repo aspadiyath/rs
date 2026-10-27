@@ -13,6 +13,7 @@ from ..models import (
 )
 from ..async_session import async_session
 from rsptx.logging import rslogger
+from rsptx.response_helpers.core import canonical_utcnow
 
 
 async def fetch_timed_exam(
@@ -109,6 +110,48 @@ async def fetch_timed_assessments(course_id: int) -> List[Tuple[str, str]]:
     async with async_session() as session:
         res = await session.execute(query)
         return [(row.name, row.description or "") for row in res.all()]
+
+
+async def is_on_open_timed_assessment(
+    question_id: int, question_name: str, sid: str, course_id: int
+) -> bool:
+    """
+    Whether a question is on a timed assessment in this course that isn't
+    past due, either directly or through a select question that served it to
+    this student (exams usually wrap their questions in select questions, and
+    ``selected_questions`` records what each student was served). Explain in
+    Plain English questions use this to give no feedback during an exam.
+
+    :param question_id: int, the question's id
+    :param question_name: str, the question's name (div_id)
+    :param sid: str, the student's username
+    :param course_id: int, the course id
+    :return: bool, True if any such assessment exists
+    """
+    is_open_exam = (
+        (Assignment.course == course_id)
+        & ((Assignment.is_timed == "T") | (Assignment.kind == "Timed"))
+        & (Assignment.duedate > canonical_utcnow())
+    )
+    on_it = (
+        select(Assignment.id)
+        .join(AssignmentQuestion, AssignmentQuestion.assignment_id == Assignment.id)
+        .where(is_open_exam & (AssignmentQuestion.question_id == question_id))
+    )
+    served_by_it = (
+        select(Assignment.id)
+        .join(AssignmentQuestion, AssignmentQuestion.assignment_id == Assignment.id)
+        .join(Question, Question.id == AssignmentQuestion.question_id)
+        .join(SelectedQuestion, SelectedQuestion.selector_id == Question.name)
+        .where(
+            is_open_exam
+            & (SelectedQuestion.sid == sid)
+            & (SelectedQuestion.selected_id == question_name)
+        )
+    )
+    async with async_session() as session:
+        res = await session.execute(on_it.union(served_by_it).limit(1))
+        return res.first() is not None
 
 
 async def reset_student_assessment(

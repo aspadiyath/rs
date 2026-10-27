@@ -18,6 +18,7 @@ We define routers for the following:
 * Authentication :mod:`rsptx.book_server_api.routers.auth`
 * Web Socket handling for peer instruction - :mod:`rsptx.book_server_api.routers.discuss`
 * Code Coach - :mod:`rsptx.book_server_api.routers.coach`
+* Explain in Plain English questions - :mod:`rsptx.book_server_api.routers.eipe`
 
 
 This module also contains code for startup and shutdown events.  See `FastAPI Startup and Shutdown Events <https://fastapi.tiangolo.com/tutorial/bigger-applications/#startup-and-shutdown-events>`_.
@@ -73,6 +74,7 @@ from .routers import course
 from .routers import rslogging
 from .routers import rsproxy
 from .routers import discuss
+from .routers import eipe
 from .telemetry import telemetry_loop
 from rsptx.auth.session import auth_manager
 from rsptx.auth.csrf import add_csrf_protection
@@ -134,6 +136,7 @@ app.include_router(assessment.router)
 app.include_router(auth.router)
 app.include_router(discuss.router)
 app.include_router(coach.router)
+app.include_router(eipe.router)
 app.include_router(course.router)
 app.include_router(rsproxy.router)
 

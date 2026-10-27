@@ -56,6 +56,7 @@ const module_map = {
     codelens: () => import("./runestone/codelens/js/codelens.js"),
     datafile: () => import("./runestone/datafile/js/datafile.js"),
     dragndrop: () => import("./runestone/dragndrop/js/timeddnd.js"),
+    eipe: () => import("./runestone/eipe/js/timed_eipe.js"),
     fillintheblank: () => import("./runestone/fitb/js/timedfitb.js"),
     groupsub: () => import("./runestone/groupsub/js/groupsub.js"),
     matching: () => import("./runestone/matching/js/matching.js"),

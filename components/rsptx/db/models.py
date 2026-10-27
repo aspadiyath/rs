@@ -342,6 +342,26 @@ class WebWorkAnswers(Base, CorrectAnswerMixin):
     __table_args__ = (Index("idx_div_sid_course_ww", "sid", "div_id", "course_name"),)
 
 
+# An Explain in Plain English answer. The book server grades it by having an
+# LLM write code from the explanation and testing that code
+# (book_server_api/routers/eipe.py), and writes this row itself.
+@register_answer_table
+class EiPEAnswers(Base, CorrectAnswerMixin):
+    __tablename__ = "eipe_answers"
+    # The student's explanation, as the grader shows it.
+    answer = Column(Text, nullable=False)
+    # The code written from the explanation, which students on an exam never see.
+    generated_code = Column(Text, nullable=True)
+    # The rest of the grading record: the input where the generated code and
+    # the function differ, the lines the explanation missed, and whether the
+    # question was on an open exam.
+    details = Column(JSON, nullable=True)
+    __table_args__ = (Index("idx_div_sid_course_eipe", "sid", "div_id", "course_name"),)
+
+
+EiPEAnswersValidation: TypeAlias = sqlalchemy_to_pydantic(EiPEAnswers)  # type: ignore
+
+
 @register_answer_table
 class SpliceAnswers(Base, CorrectAnswerMixin):
     __tablename__ = "splice_answers"

@@ -313,6 +313,7 @@ from .timed import (
     did_start_timed,
     fetch_timed_assessments,
     fetch_timed_exam,
+    is_on_open_timed_assessment,
     reset_student_assessment,
 )
 
@@ -639,6 +640,7 @@ __all__ += [
     "did_start_timed",
     "fetch_timed_assessments",
     "fetch_timed_exam",
+    "is_on_open_timed_assessment",
     "reset_student_assessment",
 ]
 # from .user

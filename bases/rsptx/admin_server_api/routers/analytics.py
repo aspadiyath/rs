@@ -154,6 +154,7 @@ CORRECT_ANSWER_TABLES = [
     "unittest_answers",
     "matching_answers",
     "microparsons_answers",
+    "eipe_answers",
     "webwork_answers",
 ]
 
